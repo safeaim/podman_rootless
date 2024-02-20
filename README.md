@@ -1,5 +1,12 @@
 Podman Rootless
 =========
+- [Podman Rootless](#podman-rootless)
+  * [Requirements](#requirements)
+  * [Role Variables](#role-variables)
+  * [Example playbook that builds local image and runs the container](#example-playbook-that-builds-local-image-and-runs-the-container)
+  * [Example playbook with image from registry](#example-playbook-with-image-from-registry)
+
+
 Ansible role that installs Podman, then sets up a service user, the correct SELinux environment, container image and systemd container unit for running the container as a rootless container.
 
 The type of systemd unit is called a Quadlet. Read more about it here <https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html>. This is a format created to faciliate a better integration between Podman containers and systemd. 
