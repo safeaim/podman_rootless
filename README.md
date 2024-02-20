@@ -287,4 +287,4 @@ Note the use of the `create_container` tag in both example. Running it with this
 
 License
 -------
-BSD
+MIT
