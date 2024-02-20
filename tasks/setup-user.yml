@@ -1,0 +1,181 @@
+---
+- name: "Setup user {{ service_user }}"
+  become: true
+  block:
+    - name: Ensure group exists
+      ansible.builtin.group:
+        name: "{{ service_user }}"
+        state: present
+
+    - name: Create user "{{ service_user }}"
+      ansible.builtin.user:
+        name: "{{ service_user }}"
+        shell: "{{ service_user_shell }}"
+        home: "{{ service_user_homedir }}"
+        system: true
+        group: "{{ service_user }}"
+        uid: "{{ service_user_uid if service_user_uid is defined else omit }}"
+
+    - name: Get the latest subuid
+      ansible.builtin.shell: "set -o pipefail && tail -1 /etc/subuid |awk -F ':' '{print $2}'"
+      register: subuid_result
+      changed_when: false
+
+    - name: Get the latest subgid
+      ansible.builtin.shell: "set -o pipefail && tail -1 /etc/subgid |awk -F ':' '{print $2}'"
+      register: subgid_result
+      changed_when: subgid_result.rc != 0
+
+    - name: Read subuid file
+      ansible.builtin.command: cat /etc/subuid
+      register: subuid_file
+      changed_when: subuid_file.rc != 0
+
+    - name: Set new subuid and subgid
+      ansible.builtin.set_fact:
+        new_subuid: "{{ (subuid_result.stdout | int) + 65536 }}"
+        new_subgid: "{{ (subgid_result.stdout | int) + 65536 }}"
+      when: service_user not in subuid_file.stdout
+
+    - name: Modify user to add new subuid/subgid range
+      ansible.builtin.command: >
+        usermod
+        --add-subuids "{{ new_subuid }}-{{ (new_subuid | int) + 65535 }}"
+        --add-subgids "{{ new_subgid }}-{{ (new_subgid | int) + 65535 }}"
+        "{{ service_user }}"
+      when: service_user not in subuid_file.stdout
+      register: uid_update
+      changed_when: uid_update.rc != 0
+
+    - name: "Add SELinux Home dir file context for homedir {{ service_user }}"
+      community.general.sefcontext:
+        target: '{{ service_user_homedir }}'
+        setype: user_home_dir_t
+        state: present
+        seuser: system_u
+
+    - name: "Add SELinux Home file context for homedir of {{ service_user }}"
+      community.general.sefcontext:
+        target: '{{ service_user_homedir }}/(/.+)?'
+        setype: user_home_t
+        state: present
+        seuser: system_u
+
+    - name: Create .config/containers/systemd
+      ansible.builtin.file:
+        path: "{{ service_user_homedir }}/.config/containers/systemd"
+        state: directory
+        group: "{{ service_user }}"
+        owner: "{{ service_user }}"
+        mode: '0700'
+
+    - name: "Create mounts.conf"
+      ansible.builtin.copy:
+        content: ''
+        dest: "{{ service_user_homedir }}/.config/containers/mounts.conf"
+        force: false
+        group: "{{ service_user }}"
+        owner: "{{ service_user }}"
+        mode: '0700'
+
+    - name: Run semanage fcontext -l command
+      ansible.builtin.command: "semanage fcontext -l"
+      register: semanage_output
+      changed_when: semanage_output.rc != 0
+
+    - name: "Copy SElinux context from /var/lib/containers to containers folder for {{ service_user }}"
+      ansible.builtin.command: semanage fcontext -a -e /var/lib/containers {{ service_user_homedir }}/.local/share/containers
+      register: context_copy
+      changed_when: context_copy.rc != 0
+      when: service_user_homedir + '/.local/share/containers = /var/lib/containers' not in semanage_output.stdout
+
+    - name: "Apply new SELinux file context to /var/lib/{{ service_user }}"
+      ansible.builtin.command: "restorecon -iFrv {{ service_user_homedir }}/.local/share/containers"
+      register: restorecon_service_user
+      changed_when: restorecon_service_user.rc != 0
+
+- name: "Enable lingering for {{ service_user }}"
+  become: true
+  block:
+    - name: "Check if lingering is enabled for {{ service_user }}"
+      ansible.builtin.stat:
+        path: "/var/lib/systemd/linger/{{ service_user }}"
+      register: linger
+
+    - name: "Enable lingering for {{ service_user }}"
+      ansible.builtin.command: "loginctl enable-linger {{ service_user }}"
+      register: linger
+      changed_when: linger.rc != 0
+      when:
+        - not linger.stat.exists
+
+- name: Include tasks relevant for setup of the container
+  ansible.builtin.include_tasks: "{{ container_prepare_tasks }}"
+  when: container_prepare_tasks
+
+- name: Build container image
+  when: build_image
+  block:
+    - name: Copy build files to build directory
+      ansible.builtin.copy:
+        src: "{{ item_file }}"
+        dest: "{{ container_build_path }}/{{ item_file }}"
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: '0700'
+      loop: "{{ container_build_files }}"
+      loop_control:
+        loop_var: item_file
+
+    - name: Build Container image
+      containers.podman.podman_image:
+        push: false
+        path: "{{ container_build_path }}"
+        name: "{{ container_local_image }}"
+        tag: latest
+      become_user: "{{ service_user }}"
+      become: true
+
+- name: "Setup container for {{ service_user }}"
+  become: true
+  tags:
+    - create_container
+  block:
+    - name: Add ports to firewall
+      ansible.posix.firewalld:
+        zone: public
+        port: "{{ item_port }}"
+        permanent: true
+        state: enabled
+      loop: "{{ firewalld_ports }}"
+      loop_control:
+        loop_var: item_port
+
+    - name: Reload firewall
+      ansible.builtin.command: firewall-cmd --reload
+      register: reload_output
+      changed_when: reload_output.rc != 0
+
+    - name: "Get user info for {{ service_user }}"
+      ansible.builtin.user:
+        name: "{{ service_user }}"
+        state: present
+      register: user_info
+
+    - name: Copy environment file to homedir of {{ service_user }}
+      ansible.builtin.copy:
+        src: "{{ container_environment_file }}"
+        dest: "{{ service_user_homedir }}"
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: '0600'
+      when: container_environment_file is defined
+
+    - name: Copy container.unit to homedir of {{ service_user }}
+      ansible.builtin.template:
+        src: container.unit.j2
+        dest: "{{ service_user_homedir }}/.config/containers/systemd/{{ container_name }}.container"
+        owner: "{{ service_user }}"
+        group: "{{ service_user }}"
+        mode: '0600'
+      notify: Enable container service

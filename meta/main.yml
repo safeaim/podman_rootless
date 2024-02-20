@@ -1,0 +1,12 @@
+galaxy_info:
+  role_name: podman_rootless
+  namespace: safeaim
+  author: safeaim
+  description: Sets up a rootless podman container, including a system user
+  license: MIT
+
+  min_ansible_version: "2.1"
+
+  galaxy_tags: ["containers", "podman", "rootless"]
+
+dependencies: []

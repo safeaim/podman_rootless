@@ -1,0 +1,3 @@
+---
+# defaults file for podman_rootless
+build_image: false

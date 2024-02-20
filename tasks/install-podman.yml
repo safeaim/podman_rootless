@@ -1,0 +1,8 @@
+---
+- name: "Install Podman"
+  become: true
+  block:
+    - name: Install Podman
+      ansible.builtin.dnf:
+        name: podman
+        state: present

@@ -1,0 +1,42 @@
+[Unit]
+Description={{ container_service_description }}
+After=network-online.target
+Wants=network-online.target
+
+[Install]
+WantedBy=default.target
+
+[Container]
+{% if build_image is true %}
+Image={{ container_local_image }}
+{% else %}
+Image={{ container_registry_image }}
+{% endif %}
+ContainerName={{ container_name }}
+{% if container_network_options is defined %}
+Network={{ container_network_options }}
+{% endif %}
+{% if container_publish_ports is defined %}
+{% for port in container_publish_ports %}
+PublishPort={{ port }}
+{% endfor %}
+{% endif %}
+{% if container_user_uid is defined %}
+User={{ container_user_uid }}
+{% else %}
+User={{ user_info.uid }}
+{% endif %}
+{% if container_volumes is defined %}
+{% for volume in container_volumes %}
+Volume={{ volume }}
+{% endfor %}
+{% endif %}
+{% if container_environment_file is defined %}
+EnvironmentFile={{ service_user_homedir }}/{{ container_environment_file }}
+{% endif %}
+{% if container_AutoUpdate is defined %}
+AutoUpdate={{ container_AutoUpdate.type }}
+{% endif %}
+[Service]
+Restart=always
+TimeoutStartSec=900

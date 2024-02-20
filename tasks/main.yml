@@ -1,0 +1,9 @@
+---
+- name: Setup environment for rootless podman
+  ansible.builtin.include_tasks: "{{ item }}"
+  loop:
+    - install-podman.yml
+    - setup-cgroupsv2.yml
+- name: Setup user
+  ansible.builtin.include_tasks: setup-user.yml
+  tags: create_container

@@ -1,0 +1,63 @@
+---
+# This entire block is to remidiate the following issues:
+# Rootless podman user cannot run containers with cgroups V2 enabled https://access.redhat.com/solutions/5913671
+# Enable cgroup v2 on RHEL8  https://access.redhat.com/solutions/6898151
+- name: "Enable CGroups V2 support on RHEL8"
+  become: true
+  when: ansible_distribution == 'RedHat' and ansible_distribution_major_version == '8'
+  block:
+    - name: Copy user-0.slice to /etc/systemd/system
+      ansible.builtin.copy:
+        src: user-0.slice
+        dest: /etc/systemd/system/user-0.slice
+        mode: '0644'
+
+    - name: Ensure /etc/systemd/system/user@.service.d directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/system/user@.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Copy delegate.conf to /etc/systemd/system/user@.service.d
+      ansible.builtin.copy:
+        src: delegate.conf
+        dest: /etc/systemd/system/user@.service.d/delegate.conf
+        mode: '0644'
+
+    - name: Ensure /etc/systemd/system/user-.slice.d directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/system/user-.slice.d
+        state: directory
+        mode: '0755'
+
+    - name: Copy override.conf to /etc/systemd/system/user-.slice.d
+      ansible.builtin.copy:
+        src: override.conf
+        dest: /etc/systemd/system/user-.slice.d/override.conf
+        mode: '0644'
+
+    - name: Read /proc/cmdline
+      ansible.builtin.slurp:
+        src: /proc/cmdline
+      register: prod_cmdline_content
+
+    - name: Decode prod_cmdline_content content
+      ansible.builtin.set_fact:
+        prod_cmdline: "{{ (prod_cmdline_content['content'] | b64decode).split('\n') }}"
+
+    - name: Enable CGroups v2 in the Grubby config
+      ansible.builtin.command: grubby --update-kernel=ALL --args="systemd.unified_cgroup_hierarchy=1"
+      # This when parameter checks whether cgroups v2 is already enabled for this boot
+      when: not prod_cmdline is search("systemd.unified_cgroup_hierarchy=1")
+      register: grubby_update
+      changed_when: grubby_update.rc != 0
+
+    - name: Reboot to enable CGroups v2 in GRUB
+      when: not prod_cmdline is search("systemd.unified_cgroup_hierarchy=1")
+      ansible.builtin.reboot:
+        msg: "Rebooting for kernel parameter update"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
