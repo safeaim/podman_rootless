@@ -1,6 +1,6 @@
-Podman Rootless
+Ansible podman rootless role
 =========
-- [Podman Rootless](#podman-rootless)
+- [Ansible podman rootless role](#podman-rootless)
   * [Requirements](#requirements)
   * [Role Variables](#role-variables)
   * [Example playbook that builds local image and runs the container](#example-playbook-that-builds-local-image-and-runs-the-container)
