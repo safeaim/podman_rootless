@@ -150,11 +150,13 @@
       loop: "{{ firewalld_ports }}"
       loop_control:
         loop_var: item_port
+      when: firewalld_ports is defined
 
     - name: Reload firewall
       ansible.builtin.command: firewall-cmd --reload
       register: reload_output
       changed_when: reload_output.rc != 0
+      when: firewalld_ports is defined
 
     - name: "Get user info for {{ service_user }}"
       ansible.builtin.user:
