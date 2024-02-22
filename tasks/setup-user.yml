@@ -111,7 +111,7 @@
 
 - name: Include tasks relevant for setup of the container
   ansible.builtin.include_tasks: "{{ container_prepare_tasks }}"
-  when: container_prepare_tasks
+  when: container_prepare_tasks is defined
 
 - name: Build container image
   when: build_image
