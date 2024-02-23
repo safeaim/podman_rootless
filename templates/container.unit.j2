@@ -37,6 +37,15 @@ EnvironmentFile={{ service_user_homedir }}/{{ container_environment_file }}
 {% if container_AutoUpdate is defined %}
 AutoUpdate={{ container_AutoUpdate.type }}
 {% endif %}
+{% if container_exec_command is defined %}
+Exec={{ container_exec_command }}
+{% endif %}
+{% if container_podman_args is defined %}
+PodmanArgs={{ container_podman_args }}
+{% endif %}
+{% if container_entrypoint is defined %}
+Entrypoint={{ container_entrypoint }}
+{% endif %}
 [Service]
 Restart=always
 TimeoutStartSec=900
