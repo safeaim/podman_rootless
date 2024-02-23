@@ -99,7 +99,16 @@ Example: `697`
   Example: `slirp4netns:port_handler=slirp4netns`
   It is recommeneded to use "slirp4netns:port_handler=slirp4netns", as the slirp4netns implementation can keep source IP addresses, while the default RootlessKit implementation treats all connections as if they were from 127.0.0.1. Note that slirp4netns is slower, but for most use cases it's fine. 
 
-- `container_environment_file`: This is optional. This is the environment file that will be copied over to the home directory of the service user, and later be mounted on the running container. Add this to your files directory of your playbook for it to be copied over by this role.
+- `container_podman_args`: This is a optional variable that can contain a list of arguments passed directly to the end of the podman run command in the generated file (right before the image name in the command line). It can be used to access Podman arguments otherwise not implemented in the container.unit.j2 template.
+ Example: `--userns=keep-id`
+
+- `container_exec_command`: This is a optional variable. If this is set then it defines what command line to run in the container. If it is not set the default entry point of the container image is used. The format is the same as for [systemd command lines](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#Command%20lines)
+  Example: `redis-server /etc/redis/myconfig.conf`
+
+- `container_entrypoint`: This is a optional variable. in case you need to override the default ENTRYPOINT from the image. Specify multi option commands in the form of a json string.
+ Example: `/foo.sh`
+
+- `container_environment_file`: This is a optional variable. This is the environment file that will be copied over to the home directory of the service user, and later be mounted on the running container. Add this to your files directory of your playbook for it to be copied over by this role.
   Example: `httpd.env`
 
 - `container_publish_ports`: Ports to be published by the container. This takes the input as a list, and expects a mapping of container port, host port and protocol
